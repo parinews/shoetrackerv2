@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ExerciseTrack2 - Log Workout</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <h1>Shoe Use Tracker</h1>
+      <nav class="header-nav">
+        <a href="index.html" class="nav-link">Summary</a>
+        <a href="log-workout.html" class="nav-link active">Log Workout</a>
+        <a href="manage-shoes.html" class="nav-link">Manage Shoes</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="container">
+    <div style="max-width: 600px; margin: 0 auto;">
+      <h2 class="mb-lg">Log Workout</h2>
+
+      <!-- Alert Messages -->
+      <div id="alert-container"></div>
+
+      <!-- No Shoes Warning -->
+      <div id="no-shoes-warning" class="alert alert-info" style="display: none;">
+        <strong>No shoes available!</strong> You need to add a shoe before logging workouts.
+        <div class="mt-lg">
+          <a href="manage-shoes.html" class="btn btn-primary">Add a Shoe</a>
+        </div>
+      </div>
+
+      <!-- Workout Form -->
+      <form id="workout-form" class="card">
+        <div class="form">
+          <!-- Shoe Selection -->
+          <div class="form-group">
+            <label for="shoe-select" class="form-label">Shoe</label>
+            <select id="shoe-select" class="form-select" required>
+              <option value="">Select a shoe...</option>
+            </select>
+          </div>
+
+          <!-- Miles Input -->
+          <div class="form-group">
+            <label for="miles-input" class="form-label">Miles</label>
+            <input 
+              type="number" 
+              id="miles-input" 
+              class="form-input" 
+              placeholder="Enter miles"
+              min="0"
+              step="1"
+              required
+            >
+            <div class="form-helper">Whole numbers only</div>
+          </div>
+
+          <!-- Date Input -->
+          <div class="form-group">
+            <label for="date-input" class="form-label">Date</label>
+            <input 
+              type="date" 
+              id="date-input" 
+              class="form-input" 
+              required
+            >
+          </div>
+
+          <!-- Form Actions -->
+          <div class="flex gap-md">
+            <button type="submit" class="btn btn-primary btn-block">
+              Save Workout
+            </button>
+            <a href="index.html" class="btn btn-outline">
+              Cancel
+            </a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <!-- Data storage script -->
+  <script src="storage.js"></script>
+
+  <!-- Page-specific script -->
+  <script>
+    /**
+     * ExerciseTrack2 - Log Workout Page
+     * Handles workout creation with validation and duplicate detection
+     */
+
+    // Page elements
+    const form = document.getElementById('workout-form');
+    const shoeSelect = document.getElementById('shoe-select');
+    const milesInput = document.getElementById('miles-input');
+    const dateInput = document.getElementById('date-input');
+    const noShoesWarning = document.getElementById('no-shoes-warning');
+    const alertContainer = document.getElementById('alert-container');
+
+    /**
+     * Initialize the page
+     */
+    function init() {
+      // Set today's date as default
+      dateInput.valueAsDate = new Date();
+
+      // Load active shoes
+      loadShoes();
+
+      // Add form submit listener
+      form.addEventListener('submit', handleSubmit);
+
+      // Validate miles input to only allow whole numbers
+      milesInput.addEventListener('input', handleMilesInput);
+    }
+
+    /**
+     * Load active shoes into dropdown
+     */
+    function loadShoes() {
+      const shoes = Storage.getShoes();
+      const activeShoes = shoes.filter(shoe => !shoe.retired);
+
+      // Clear existing options (except the first placeholder)
+      shoeSelect.innerHTML = '<option value="">Select a shoe...</option>';
+
+      if (activeShoes.length === 0) {
+        // No active shoes - show warning and disable form
+        noShoesWarning.style.display = 'block';
+        form.style.display = 'none';
+        return;
+      }
+
+      // Show form and hide warning
+      noShoesWarning.style.display = 'none';
+      form.style.display = 'block';
+
+      // Populate dropdown with active shoes
+      activeShoes.forEach(shoe => {
+        const option = document.createElement('option');
+        option.value = shoe.id;
+        option.textContent = shoe.name;
+        shoeSelect.appendChild(option);
+      });
+    }
+
+    /**
+     * Handle miles input to ensure only whole numbers
+     */
+    function handleMilesInput(e) {
+      // Remove decimal point and anything after it
+      const value = e.target.value;
+      if (value.includes('.')) {
+        e.target.value = Math.floor(parseFloat(value)) || '';
+      }
+    }
+
+    /**
+     * Handle form submission
+     */
+    function handleSubmit(e) {
+      e.preventDefault();
+
+      // Clear previous alerts
+      alertContainer.innerHTML = '';
+
+      // Get form values
+      const shoeId = shoeSelect.value;
+      const miles = parseInt(milesInput.value, 10);
+      const date = dateInput.value;
+
+      // Validate
+      if (!shoeId) {
+        showAlert('Please select a shoe', 'error');
+        return;
+      }
+
+      if (isNaN(miles) || miles < 0) {
+        showAlert('Please enter a valid number of miles', 'error');
+        return;
+      }
+
+      if (!date) {
+        showAlert('Please select a date', 'error');
+        return;
+      }
+
+      // Add workout
+      try {
+        const result = Storage.addWorkout(shoeId, miles, date);
+
+        // Check for duplicate
+        if (result.isDuplicate) {
+          showAlert(
+            'Warning: A workout with the same shoe, date, and miles already exists. The workout has been saved anyway.',
+            'warning'
+          );
+          
+          // Still redirect after showing warning (with delay)
+          setTimeout(() => {
+            window.location.href = 'index.html';
+          }, 2000);
+        } else {
+          // Success - redirect immediately
+          window.location.href = 'index.html';
+        }
+      } catch (error) {
+        showAlert('Error saving workout: ' + error.message, 'error');
+      }
+    }
+
+    /**
+     * Show an alert message
+     * @param {string} message - Alert message
+     * @param {string} type - Alert type (success, error, warning, info)
+     */
+    function showAlert(message, type = 'info') {
+      const alert = document.createElement('div');
+      alert.className = `alert alert-${type} fade-in`;
+      alert.textContent = message;
+      alertContainer.appendChild(alert);
+
+      // Scroll to top to ensure alert is visible
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

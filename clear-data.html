@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clear All Data - Exercise Track</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <h1>Shoe Use Tracker</h1>
+      <nav class="header-nav">
+        <a href="index.html" class="nav-link">Summary</a>
+        <a href="log-workout.html" class="nav-link">Log Workout</a>
+        <a href="manage-shoes.html" class="nav-link">Manage Shoes</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="container">
+    <div style="max-width: 600px; margin: 0 auto;">
+      <h2 class="mb-lg">Clear All Data</h2>
+
+      <div class="card">
+        <div class="alert alert-warning mb-lg">
+          <strong>Warning!</strong> This will permanently delete all shoes, workouts, and shoe order data. This action cannot be undone.
+        </div>
+
+        <div id="status-message"></div>
+
+        <div class="flex gap-md">
+          <button id="clear-btn" class="btn btn-danger btn-block">
+            Clear All Data
+          </button>
+          <a href="index.html" class="btn btn-outline">
+            Cancel
+          </a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Data storage script -->
+  <script src="storage.js"></script>
+
+  <!-- Page-specific script -->
+  <script>
+    const clearBtn = document.getElementById('clear-btn');
+    const statusMessage = document.getElementById('status-message');
+
+    clearBtn.addEventListener('click', function() {
+      if (confirm('Are you absolutely sure you want to delete ALL data? This cannot be undone.')) {
+        try {
+          Storage.clearAll();
+          
+          statusMessage.innerHTML = '<div class="alert alert-success fade-in">All data has been successfully cleared!</div>';
+          clearBtn.disabled = true;
+          clearBtn.textContent = 'Data Cleared';
+          
+          // Redirect to home page after 2 seconds
+          setTimeout(() => {
+            window.location.href = 'index.html';
+          }, 2000);
+        } catch (error) {
+          statusMessage.innerHTML = '<div class="alert alert-error fade-in">Error clearing data: ' + error.message + '</div>';
+        }
+      }
+    });
+  </script>
+</body>
+</html>
+

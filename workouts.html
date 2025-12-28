@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ExerciseTrack2 - Workouts</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <h1>Shoe Use Tracker</h1>
+      <nav class="header-nav">
+        <a href="index.html" class="nav-link">Summary</a>
+        <a href="log-workout.html" class="nav-link">Log Workout</a>
+        <a href="manage-shoes.html" class="nav-link">Manage Shoes</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="container">
+    <!-- Breadcrumb -->
+    <div style="margin-bottom: var(--space-lg);">
+      <a href="manage-shoes.html" style="color: var(--text-muted); text-decoration: none;">← Back to Manage Shoes</a>
+    </div>
+
+    <div class="flex-between mb-lg">
+      <div>
+        <h2 id="page-title">Workouts</h2>
+        <p id="shoe-subtitle" style="color: var(--text-muted); margin-top: var(--space-sm);"></p>
+      </div>
+      <a href="log-workout.html" class="btn btn-primary">
+        Log Workout
+      </a>
+    </div>
+
+    <!-- Alert Messages -->
+    <div id="alert-container"></div>
+
+    <!-- Workouts List -->
+    <div id="workouts-list"></div>
+
+    <!-- Empty State -->
+    <div id="empty-state" class="empty-state" style="display: none;">
+      <div class="empty-state-icon">📊</div>
+      <h3 class="empty-state-title">No Workouts Yet</h3>
+      <p class="empty-state-text">Start logging workouts to see them here.</p>
+      <a href="log-workout.html" class="btn btn-primary">Log Your First Workout</a>
+    </div>
+  </main>
+
+  <!-- Edit Modal Overlay -->
+  <div id="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(10, 25, 41, 0.5); z-index: 1000; backdrop-filter: blur(4px);"></div>
+
+  <!-- Edit Workout Modal -->
+  <div id="edit-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1001; max-width: 600px; width: 90%;">
+    <div class="card">
+      <h3 class="card-title">Edit Workout</h3>
+      <form id="edit-form" class="form">
+        <input type="hidden" id="edit-workout-id">
+        
+        <div class="form-group">
+          <label for="edit-shoe-select" class="form-label">Shoe</label>
+          <select id="edit-shoe-select" class="form-select" required>
+            <option value="">Select a shoe...</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="edit-miles-input" class="form-label">Miles</label>
+          <input 
+            type="number" 
+            id="edit-miles-input" 
+            class="form-input" 
+            min="0"
+            step="1"
+            required
+          >
+          <div class="form-helper">Whole numbers only</div>
+        </div>
+
+        <div class="form-group">
+          <label for="edit-date-input" class="form-label">Date</label>
+          <input 
+            type="date" 
+            id="edit-date-input" 
+            class="form-input" 
+            required
+          >
+        </div>
+
+        <div class="flex gap-md">
+          <button type="submit" class="btn btn-primary">
+            Save Changes
+          </button>
+          <button type="button" id="modal-cancel" class="btn btn-outline">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="delete-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1001; max-width: 500px; width: 90%;">
+    <div class="card">
+      <h3 class="card-title">Delete Workout</h3>
+      <p style="margin: var(--space-lg) 0; color: var(--text-secondary);">
+        Are you sure you want to delete this workout? This action cannot be undone.
+      </p>
+      <div class="flex gap-md">
+        <button id="delete-confirm" class="btn btn-danger">Delete</button>
+        <button id="delete-cancel" class="btn btn-outline">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Data storage script -->
+  <script src="storage.js"></script>
+
+  <!-- Page-specific script -->
+  <script>
+    /**
+     * ExerciseTrack2 - Workouts Page
+     * View, edit, and delete workouts for a specific shoe or all shoes
+     */
+
+    // Page elements
+    const pageTitle = document.getElementById('page-title');
+    const shoeSubtitle = document.getElementById('shoe-subtitle');
+    const workoutsList = document.getElementById('workouts-list');
+    const emptyState = document.getElementById('empty-state');
+    const alertContainer = document.getElementById('alert-container');
+
+    // Modal elements
+    const modalOverlay = document.getElementById('modal-overlay');
+    const editModal = document.getElementById('edit-modal');
+    const editForm = document.getElementById('edit-form');
+    const editWorkoutId = document.getElementById('edit-workout-id');
+    const editShoeSelect = document.getElementById('edit-shoe-select');
+    const editMilesInput = document.getElementById('edit-miles-input');
+    const editDateInput = document.getElementById('edit-date-input');
+    const modalCancel = document.getElementById('modal-cancel');
+
+    const deleteModal = document.getElementById('delete-modal');
+    const deleteConfirm = document.getElementById('delete-confirm');
+    const deleteCancel = document.getElementById('delete-cancel');
+
+    // State
+    let filterShoeId = null;
+    let deleteWorkoutId = null;
+
+    /**
+     * Initialize the page
+     */
+    function init() {
+      // Get shoe ID from URL query parameter
+      const urlParams = new URLSearchParams(window.location.search);
+      filterShoeId = urlParams.get('shoe');
+
+      // Update page title
+      if (filterShoeId) {
+        const shoe = Storage.getShoeById(filterShoeId);
+        if (shoe) {
+          pageTitle.textContent = `Workouts for ${shoe.name}`;
+          const totalMiles = Storage.getTotalMiles(filterShoeId);
+          shoeSubtitle.textContent = `${totalMiles.toLocaleString()} total miles`;
+        }
+      } else {
+        pageTitle.textContent = 'All Workouts';
+      }
+
+      // Load shoes into edit dropdown
+      loadShoesForEdit();
+
+      // Render workouts
+      renderWorkouts();
+
+      // Event listeners
+      editForm.addEventListener('submit', handleEditSubmit);
+      editMilesInput.addEventListener('input', handleMilesInput);
+      modalCancel.addEventListener('click', hideEditModal);
+      deleteCancel.addEventListener('click', hideDeleteModal);
+      modalOverlay.addEventListener('click', () => {
+        hideEditModal();
+        hideDeleteModal();
+      });
+    }
+
+    /**
+     * Load all shoes into the edit dropdown
+     */
+    function loadShoesForEdit() {
+      const shoes = Storage.getShoes();
+      editShoeSelect.innerHTML = '<option value="">Select a shoe...</option>';
+
+      shoes.forEach(shoe => {
+        const option = document.createElement('option');
+        option.value = shoe.id;
+        option.textContent = shoe.name + (shoe.retired ? ' (Retired)' : '');
+        editShoeSelect.appendChild(option);
+      });
+    }
+
+    /**
+     * Render workouts list
+     */
+    function renderWorkouts() {
+      let workouts = Storage.getWorkouts();
+
+      // Filter by shoe if specified
+      if (filterShoeId) {
+        workouts = workouts.filter(w => w.shoeId === filterShoeId);
+      }
+
+      if (workouts.length === 0) {
+        workoutsList.style.display = 'none';
+        emptyState.style.display = 'block';
+        return;
+      }
+
+      workoutsList.style.display = 'block';
+      emptyState.style.display = 'none';
+
+      // Sort by date (most recent first)
+      workouts.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+      // Group by date
+      const groupedByDate = {};
+      workouts.forEach(workout => {
+        if (!groupedByDate[workout.date]) {
+          groupedByDate[workout.date] = [];
+        }
+        groupedByDate[workout.date].push(workout);
+      });
+
+      // Clear list
+      workoutsList.innerHTML = '';
+
+      // Render each date group
+      Object.keys(groupedByDate).sort((a, b) => new Date(b) - new Date(a)).forEach(date => {
+        const dateHeader = document.createElement('h3');
+        dateHeader.textContent = formatDate(date);
+        dateHeader.style.marginTop = 'var(--space-lg)';
+        dateHeader.style.marginBottom = 'var(--space-md)';
+        dateHeader.style.color = 'var(--text-secondary)';
+        dateHeader.style.fontSize = '1rem';
+        dateHeader.style.fontFamily = 'var(--font-body)';
+        dateHeader.style.fontWeight = '700';
+        dateHeader.style.textTransform = 'uppercase';
+        dateHeader.style.letterSpacing = '0.05em';
+        workoutsList.appendChild(dateHeader);
+
+        const dayWorkouts = groupedByDate[date];
+        dayWorkouts.forEach(workout => {
+          const item = createWorkoutItem(workout);
+          workoutsList.appendChild(item);
+        });
+      });
+    }
+
+    /**
+     * Create a workout list item
+     * @param {Object} workout - Workout object
+     * @returns {HTMLElement} Workout item element
+     */
+    function createWorkoutItem(workout) {
+      const shoe = Storage.getShoeById(workout.shoeId);
+      const shoeName = shoe ? shoe.name : 'Unknown Shoe';
+
+      const item = document.createElement('div');
+      item.className = 'workout-item fade-in';
+
+      item.innerHTML = `
+        <div class="workout-info">
+          <div class="workout-shoe">${escapeHtml(shoeName)}</div>
+        </div>
+        <div class="flex-center gap-md">
+          <div class="workout-miles">${workout.miles}</div>
+          <div class="workout-actions">
+            <button class="btn btn-outline btn-small" onclick="editWorkout('${workout.id}')">
+              Edit
+            </button>
+            <button class="btn btn-danger btn-small" onclick="confirmDeleteWorkout('${workout.id}')">
+              Delete
+            </button>
+          </div>
+        </div>
+      `;
+
+      return item;
+    }
+
+    /**
+     * Show edit modal for a workout
+     * @param {string} workoutId - Workout ID
+     */
+    window.editWorkout = function(workoutId) {
+      const workout = Storage.getWorkoutById(workoutId);
+      if (!workout) return;
+
+      // Populate form
+      editWorkoutId.value = workout.id;
+      editShoeSelect.value = workout.shoeId;
+      editMilesInput.value = workout.miles;
+      editDateInput.value = workout.date;
+
+      // Show modal
+      modalOverlay.style.display = 'block';
+      editModal.style.display = 'block';
+    };
+
+    /**
+     * Hide edit modal
+     */
+    function hideEditModal() {
+      modalOverlay.style.display = 'none';
+      editModal.style.display = 'none';
+      editForm.reset();
+    }
+
+    /**
+     * Handle edit form submission
+     */
+    function handleEditSubmit(e) {
+      e.preventDefault();
+
+      const workoutId = editWorkoutId.value;
+      const shoeId = editShoeSelect.value;
+      const miles = parseInt(editMilesInput.value, 10);
+      const date = editDateInput.value;
+
+      // Validate
+      if (!shoeId || isNaN(miles) || miles < 0 || !date) {
+        showAlert('Please fill in all fields correctly', 'error');
+        return;
+      }
+
+      // Update workout
+      try {
+        Storage.updateWorkout(workoutId, shoeId, miles, date);
+        showAlert('Workout updated successfully', 'success');
+        hideEditModal();
+        renderWorkouts();
+        
+        // Update subtitle if viewing single shoe
+        if (filterShoeId) {
+          const totalMiles = Storage.getTotalMiles(filterShoeId);
+          shoeSubtitle.textContent = `${totalMiles.toLocaleString()} total miles`;
+        }
+      } catch (error) {
+        showAlert('Error updating workout: ' + error.message, 'error');
+      }
+    }
+
+    /**
+     * Show delete confirmation modal
+     * @param {string} workoutId - Workout ID
+     */
+    window.confirmDeleteWorkout = function(workoutId) {
+      deleteWorkoutId = workoutId;
+      modalOverlay.style.display = 'block';
+      deleteModal.style.display = 'block';
+
+      deleteConfirm.onclick = () => {
+        deleteWorkout(deleteWorkoutId);
+      };
+    };
+
+    /**
+     * Delete a workout
+     * @param {string} workoutId - Workout ID
+     */
+    function deleteWorkout(workoutId) {
+      try {
+        Storage.deleteWorkout(workoutId);
+        showAlert('Workout deleted successfully', 'success');
+        hideDeleteModal();
+        renderWorkouts();
+
+        // Update subtitle if viewing single shoe
+        if (filterShoeId) {
+          const totalMiles = Storage.getTotalMiles(filterShoeId);
+          shoeSubtitle.textContent = `${totalMiles.toLocaleString()} total miles`;
+        }
+      } catch (error) {
+        showAlert('Error deleting workout: ' + error.message, 'error');
+      }
+    }
+
+    /**
+     * Hide delete modal
+     */
+    function hideDeleteModal() {
+      modalOverlay.style.display = 'none';
+      deleteModal.style.display = 'none';
+      deleteWorkoutId = null;
+    }
+
+    /**
+     * Handle miles input to ensure only whole numbers
+     */
+    function handleMilesInput(e) {
+      const value = e.target.value;
+      if (value.includes('.')) {
+        e.target.value = Math.floor(parseFloat(value)) || '';
+      }
+    }
+
+    /**
+     * Format date string for display
+     * @param {string} dateStr - Date string (YYYY-MM-DD)
+     * @returns {string} Formatted date
+     */
+    function formatDate(dateStr) {
+      const date = new Date(dateStr + 'T00:00:00');
+      return date.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+    }
+
+    /**
+     * Show an alert message
+     * @param {string} message - Alert message
+     * @param {string} type - Alert type (success, error, warning, info)
+     */
+    function showAlert(message, type = 'info') {
+      const alert = document.createElement('div');
+      alert.className = `alert alert-${type} fade-in`;
+      alert.textContent = message;
+      alertContainer.appendChild(alert);
+
+      // Auto-dismiss success messages after 5 seconds
+      if (type === 'success') {
+        setTimeout(() => {
+          alert.remove();
+        }, 5000);
+      }
+
+      // Scroll to top to ensure alert is visible
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    /**
+     * Escape HTML to prevent XSS
+     * @param {string} text - Text to escape
+     * @returns {string} Escaped text
+     */
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ExerciseTrack2 - Summary</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <h1>Shoe Use Tracker</h1>
+      <nav class="header-nav">
+        <a href="index.html" class="nav-link active">Summary</a>
+        <a href="log-workout.html" class="nav-link">Log Workout</a>
+        <a href="manage-shoes.html" class="nav-link">Manage Shoes</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="container">
+    <!-- Log Workout Button -->
+    <div class="flex-between mb-lg">
+      <h2>Your Shoes</h2>
+      <a href="log-workout.html" class="btn btn-primary btn-large">
+        Log Workout
+      </a>
+    </div>
+
+    <!-- Shoes List Container -->
+    <div id="shoes-container"></div>
+
+    <!-- Empty State (shown when no shoes exist) -->
+    <div id="empty-state" class="empty-state" style="display: none;">
+      <div class="empty-state-icon">👟</div>
+      <h3 class="empty-state-title">No Shoes Yet</h3>
+      <p class="empty-state-text">Add your first shoe to start tracking your cardio miles!</p>
+      <a href="manage-shoes.html" class="btn btn-primary">Add Your First Shoe</a>
+    </div>
+  </main>
+
+  <!-- Data storage script -->
+  <script src="storage.js"></script>
+
+  <!-- Page-specific script -->
+  <script>
+    /**
+     * ExerciseTrack2 - Summary Page
+     * Displays all shoes with total miles, supports drag-and-drop reordering
+     */
+
+    // Drag and drop state
+    let draggedShoeId = null;
+
+    /**
+     * Initialize the page
+     */
+    function init() {
+      renderShoes();
+    }
+
+    /**
+     * Render all shoes in user-defined order
+     */
+    function renderShoes() {
+      const shoes = Storage.getShoesOrdered();
+      const container = document.getElementById('shoes-container');
+      const emptyState = document.getElementById('empty-state');
+
+      if (shoes.length === 0) {
+        container.style.display = 'none';
+        emptyState.style.display = 'block';
+        return;
+      }
+
+      container.style.display = 'block';
+      emptyState.style.display = 'none';
+      container.innerHTML = '';
+
+      shoes.forEach((shoe, index) => {
+        const card = createShoeCard(shoe, index);
+        container.appendChild(card);
+      });
+    }
+
+    /**
+     * Create a shoe card element
+     * @param {Object} shoe - Shoe object
+     * @param {number} index - Position in array
+     * @returns {HTMLElement} Card element
+     */
+    function createShoeCard(shoe, index) {
+      const totalMiles = Storage.getTotalMiles(shoe.id);
+      
+      const card = document.createElement('div');
+      card.className = 'card shoe-card fade-in';
+      card.draggable = true;
+      card.dataset.shoeId = shoe.id;
+      card.dataset.index = index;
+
+      // Drag event listeners
+      card.addEventListener('dragstart', handleDragStart);
+      card.addEventListener('dragover', handleDragOver);
+      card.addEventListener('drop', handleDrop);
+      card.addEventListener('dragend', handleDragEnd);
+
+      card.innerHTML = `
+        <div class="card-header">
+          <div class="shoe-header-content">
+            <div class="shoe-info">
+              <span class="drag-handle" title="Drag to reorder">⋮⋮</span>
+              <h3 class="shoe-name">${escapeHtml(shoe.name)}</h3>
+              <span class="shoe-status ${shoe.retired ? 'status-retired' : 'status-active'}">
+                ${shoe.retired ? 'Retired' : 'Active'}
+              </span>
+            </div>
+            ${shoe.imageData ? `<img src="${shoe.imageData}" alt="${escapeHtml(shoe.name)}" class="shoe-image">` : '<div class="shoe-image-placeholder">👟</div>'}
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="shoe-miles">${totalMiles.toLocaleString()}</div>
+          <div class="miles-label">Total Miles</div>
+        </div>
+      `;
+
+      return card;
+    }
+
+    /**
+     * Handle drag start
+     */
+    function handleDragStart(e) {
+      draggedShoeId = e.currentTarget.dataset.shoeId;
+      e.currentTarget.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/html', e.currentTarget.innerHTML);
+    }
+
+    /**
+     * Handle drag over
+     */
+    function handleDragOver(e) {
+      if (e.preventDefault) {
+        e.preventDefault();
+      }
+      
+      e.dataTransfer.dropEffect = 'move';
+      
+      const targetCard = e.currentTarget;
+      if (targetCard.dataset.shoeId !== draggedShoeId) {
+        targetCard.classList.add('drag-over');
+      }
+      
+      return false;
+    }
+
+    /**
+     * Handle drop
+     */
+    function handleDrop(e) {
+      if (e.stopPropagation) {
+        e.stopPropagation();
+      }
+
+      e.currentTarget.classList.remove('drag-over');
+
+      const targetShoeId = e.currentTarget.dataset.shoeId;
+      
+      if (draggedShoeId !== targetShoeId) {
+        reorderShoes(draggedShoeId, targetShoeId);
+      }
+
+      return false;
+    }
+
+    /**
+     * Handle drag end
+     */
+    function handleDragEnd(e) {
+      e.currentTarget.classList.remove('dragging');
+      
+      // Remove drag-over class from all cards
+      document.querySelectorAll('.shoe-card').forEach(card => {
+        card.classList.remove('drag-over');
+      });
+    }
+
+    /**
+     * Reorder shoes in the array
+     * @param {string} draggedId - ID of dragged shoe
+     * @param {string} targetId - ID of target shoe
+     */
+    function reorderShoes(draggedId, targetId) {
+      const order = Storage.getShoeOrder();
+      
+      // Find indices
+      const draggedIndex = order.indexOf(draggedId);
+      const targetIndex = order.indexOf(targetId);
+
+      // Remove dragged item
+      order.splice(draggedIndex, 1);
+      
+      // Insert at new position
+      order.splice(targetIndex, 0, draggedId);
+
+      // Save new order
+      Storage.saveShoeOrder(order);
+
+      // Re-render
+      renderShoes();
+    }
+
+    /**
+     * Escape HTML to prevent XSS
+     * @param {string} text - Text to escape
+     * @returns {string} Escaped text
+     */
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
