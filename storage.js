@@ -192,7 +192,7 @@ const Storage = {
   /**
    * Add a new workout
    * @param {string} shoeId - Shoe ID
-   * @param {number} miles - Miles (whole number)
+   * @param {number} miles - Miles (can include decimals up to 2 places)
    * @param {string} date - Date string (YYYY-MM-DD)
    * @returns {Object} Object with workout and isDuplicate flag
    */
@@ -209,7 +209,7 @@ const Storage = {
     const newWorkout = {
       id: this.generateId(),
       shoeId: shoeId,
-      miles: parseInt(miles, 10),
+      miles: parseFloat(miles),
       date: date,
       createdAt: new Date().toISOString()
     };
@@ -236,7 +236,7 @@ const Storage = {
     
     if (workout) {
       workout.shoeId = shoeId;
-      workout.miles = parseInt(miles, 10);
+      workout.miles = parseFloat(miles);
       workout.date = date;
       workout.updatedAt = new Date().toISOString();
       this.saveWorkouts(workouts);
