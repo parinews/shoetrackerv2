@@ -55,10 +55,10 @@
               class="form-input" 
               placeholder="Enter miles"
               min="0"
-              step="1"
+              step="0.01"
               required
             >
-            <div class="form-helper">Whole numbers only</div>
+            <div class="form-helper">Up to 2 decimal places</div>
           </div>
 
           <!-- Date Input -->
@@ -152,13 +152,16 @@
     }
 
     /**
-     * Handle miles input to ensure only whole numbers
+     * Handle miles input to ensure only 2 decimal places
      */
     function handleMilesInput(e) {
-      // Remove decimal point and anything after it
       const value = e.target.value;
       if (value.includes('.')) {
-        e.target.value = Math.floor(parseFloat(value)) || '';
+        const parts = value.split('.');
+        // Limit to 2 decimal places
+        if (parts[1] && parts[1].length > 2) {
+          e.target.value = parseFloat(value).toFixed(2);
+        }
       }
     }
 
@@ -173,7 +176,7 @@
 
       // Get form values
       const shoeId = shoeSelect.value;
-      const miles = parseInt(milesInput.value, 10);
+      const miles = parseFloat(milesInput.value);
       const date = dateInput.value;
 
       // Validate
@@ -187,6 +190,9 @@
         return;
       }
 
+      // Round to 2 decimal places
+      const roundedMiles = Math.round(miles * 100) / 100;
+
       if (!date) {
         showAlert('Please select a date', 'error');
         return;
@@ -194,7 +200,7 @@
 
       // Add workout
       try {
-        const result = Storage.addWorkout(shoeId, miles, date);
+        const result = Storage.addWorkout(shoeId, roundedMiles, date);
 
         // Check for duplicate
         if (result.isDuplicate) {
